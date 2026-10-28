@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>TextureForge AI — PBR Texture Studio</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js and OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- JSZip & FileSaver -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #0b0f19; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(51, 65, 85, 0.5); }
+    .glass-card { background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.8); }
+    .no-tap-highlight { -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased no-tap-highlight">
+
+  <!-- TOP MINIMAL NAV -->
+  <header class="h-14 border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-xl sticky top-0 z-30 px-3 sm:px-6 flex items-center justify-between">
+    <!-- Brand -->
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20">
+        <i data-lucide="box" class="w-4 h-4 stroke-[2.5]"></i>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-sm sm:text-base text-white tracking-tight">TextureForge</span>
+        <span class="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded">AI PBR</span>
+      </div>
+    </div>
+
+    <!-- Right Actions -->
+    <div class="flex items-center gap-2">
+      <!-- Engine Indicator (Hidden on small mobile) -->
+      <div class="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-900/60 border border-slate-800 px-2.5 py-1 rounded-lg">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        <span>Unity / UE5 / Godot</span>
+      </div>
+
+      <!-- Credit Button -->
+      <button onclick="openPricingModal()" class="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-semibold transition">
+        <i data-lucide="zap" class="w-3.5 h-3.5 fill-emerald-400"></i>
+        <span id="creditBadge">5 Credits</span>
+        <span class="text-[10px] bg-emerald-500 text-slate-950 font-bold px-1.5 py-0.2 rounded ml-1">PRO</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 w-full max-w-7xl mx-auto p-3 sm:p-5 flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-5 items-start">
+
+    <!-- 3D VIEWPORT & MAPS SECTION (Mobile: Top, Desktop: Left 7 Cols) -->
+    <div class="w-full lg:col-span-7 flex flex-col gap-3 sm:gap-4">
+      
+      <!-- 3D Canvas Box -->
+      <div class="relative w-full h-[340px] sm:h-[460px] md:h-[500px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex flex-col">
+        <!-- Three.js Canvas -->
+        <div id="canvasContainer" class="w-full h-full cursor-grab active:cursor-grabbing touch-none"></div>
+
+        <!-- Floating Mesh Selector (Top Left) -->
+        <div class="absolute top-3 left-3 flex glass-panel p-1 rounded-xl shadow-lg gap-1 max-w-[calc(100%-110px)] overflow-x-auto scrollbar-none z-10">
+          <button onclick="setMeshShape('sphere')" id="shape-sphere" class="shape-btn px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-500 text-slate-950 font-bold shrink-0">Sphere</button>
+          <button onclick="setMeshShape('cube')" id="shape-cube" class="shape-btn px-2.5 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white shrink-0">Cube</button>
+          <button onclick="setMeshShape('plane')" id="shape-plane" class="shape-btn px-2.5 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white shrink-0">Plane</button>
+          <button onclick="setMeshShape('cylinder')" id="shape-cylinder" class="shape-btn px-2.5 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white shrink-0">Cylinder</button>
+          <button onclick="setMeshShape('torus')" id="shape-torus" class="shape-btn px-2.5 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white shrink-0">Torus</button>
+        </div>
+
+        <!-- Floating View Toggles (Top Right) -->
+        <div class="absolute top-3 right-3 flex items-center gap-1 glass-panel p-1 rounded-xl z-10">
+          <button onclick="toggleRotate()" id="btn-rotate" title="Toggle Auto-Rotation" class="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs">
+            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+          </button>
+          <button onclick="toggleWireframe()" id="btn-wireframe" title="Toggle Wireframe Mode" class="p-1.5 rounded-lg text-slate-400 hover:text-white text-xs">
+            <i data-lucide="box" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- Floating Material Controls (Bottom Bar) -->
+        <div class="absolute bottom-3 left-3 right-3 glass-panel p-2 sm:p-2.5 rounded-xl flex items-center justify-between gap-2 text-xs overflow-x-auto z-10">
+          <!-- UV Tiling -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-slate-400 text-[11px] font-medium">Tiling:</span>
+            <input type="range" id="slider-tiling" min="1" max="6" step="1" value="2" oninput="updateMaterialParams()" class="w-14 sm:w-16 accent-emerald-500 cursor-pointer">
+            <span id="val-tiling" class="text-emerald-400 font-mono text-[11px] w-4">2x</span>
+          </div>
+
+          <!-- Normal Depth -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-slate-400 text-[11px] font-medium">Bump:</span>
+            <input type="range" id="slider-normal" min="0.2" max="3" step="0.1" value="1.6" oninput="updateMaterialParams()" class="w-14 sm:w-16 accent-emerald-500 cursor-pointer">
+            <span id="val-normal" class="text-emerald-400 font-mono text-[11px] w-5">1.6</span>
+          </div>
+
+          <!-- Roughness -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-slate-400 text-[11px] font-medium">Roughness:</span>
+            <input type="range" id="slider-roughness" min="0.1" max="1.0" step="0.05" value="0.75" oninput="updateMaterialParams()" class="w-14 sm:w-16 accent-emerald-500 cursor-pointer">
+            <span id="val-roughness" class="text-emerald-400 font-mono text-[11px] w-6">0.75</span>
+          </div>
+
+          <!-- Displacement -->
+          <div class="hidden sm:flex items-center gap-1.5 shrink-0">
+            <span class="text-slate-400 text-[11px] font-medium">Height:</span>
+            <input type="range" id="slider-displacement" min="0" max="0.3" step="0.02" value="0.06" oninput="updateMaterialParams()" class="w-14 sm:w-16 accent-emerald-500 cursor-pointer">
+            <span id="val-displacement" class="text-emerald-400 font-mono text-[11px] w-6">0.06</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compact Channel Tabs / Thumbnails -->
+      <div class="w-full space-y-1.5">
+        <div class="flex items-center justify-between text-xs px-1">
+          <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-emerald-400"></i> PBR Maps (Click to zoom/download)
+          </span>
+          <span class="text-slate-500 text-[11px]">6 channels synchronized</span>
+        </div>
+
+        <div class="grid grid-cols-6 gap-2">
+          <!-- Albedo -->
+          <div onclick="openMapModal('Albedo (Base Color)', materialMaps.albedo)" class="cursor-pointer group glass-card hover:border-emerald-500/50 rounded-xl p-1.5 flex flex-col items-center gap-1 transition">
+            <div class="aspect-square w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
+              <img id="img-albedo" class="w-full h-full object-cover group-hover:scale-105 transition" />
+            </div>
+            <span class="text-[10px] font-semibold text-slate-300 truncate w-full text-center">Albedo</span>
+          </div>
+
+          <!-- Normal -->
+          <div onclick="openMapModal('Normal Map (Tangent)', materialMaps.normal)" class="cursor-pointer group glass-card hover:border-emerald-500/50 rounded-xl p-1.5 flex flex-col items-center gap-1 transition">
+            <div class="aspect-square w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
+              <img id="img-normal" class="w-full h-full object-cover group-hover:scale-105 transition" />
+            </div>
+            <span class="text-[10px] font-semibold text-slate-300 truncate w-full text-center">Normal</span>
+          </div>
+
+          <!-- Roughness -->
+          <div onclick="openMapModal('Roughness Map', materialMaps.roughness)" class="cursor-pointer group glass-card hover:border-emerald-500/50 rounded-xl p-1.5 flex flex-col items-center gap-1 transition">
+            <div class="aspect-square w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
+              <img id="img-roughness" class="w-full h-full object-cover group-hover:scale-105 transition" />
+            </div>
+            <span class="text-[10px] font-semibold text-slate-300 truncate w-full text-center">Rough</span>
+          </div>
+
+          <!-- Height -->
+          <div onclick="openMapModal('Height / Displacement Map', materialMaps.height)" class="cursor-pointer group glass-card hover:border-emerald-500/50 rounded-xl p-1.5 flex flex-col items-center gap-1 transition">
+            <div class="aspect-square w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
+              <img id="img-height" class="w-full h-full object-cover group-hover:scale-105 transition" />
+            </div>
+            <span class="text-[10px] font-semibold text-slate-300 truncate w-full text-center">Height</span>
+          </div>
+
+          <!-- AO -->
+          <div onclick="openMapModal('Ambient Occlusion Map', materialMaps.ao)" class="cursor-pointer group glass-card hover:border-emerald-500/50 rounded-xl p-1.5 flex flex-col items-center gap-1 transition">
+            <div class="aspect-square w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
+              <img id="img-ao" class="w-full h-full object-cover group-hover:scale-105 transition" />
+            </div>
+            <span class="text-[10px] font-semibold text-slate-300 truncate w-full text-center">AO</span>
+          </div>
+
+          <!-- UE5 ORM -->
+          <div onclick="openMapModal('UE5 Packed ORM', materialMaps.orm)" class="cursor-pointer group glass-card hover:border-emerald-500/50 rounded-xl p-1.5 flex flex-col items-center gap-1 transition">
+            <div class="aspect-square w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
+              <img id="img-orm" class="w-full h-full object-cover group-hover:scale-105 transition" />
+            </div>
+            <span class="text-[10px] font-semibold text-emerald-400 truncate w-full text-center">UE5 ORM</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- GENERATOR CONTROLS SECTION (Mobile: Bottom, Desktop: Right 5 Cols) -->
+    <div class="w-full lg:col-span-5 flex flex-col gap-4">
+
+      <div class="glass-card rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-xl">
+        
+        <!-- Input Mode Switcher (Text Prompt vs Image Upload) -->
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            <button onclick="setInputMode('prompt')" id="mode-prompt" class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500 text-slate-950 transition">
+              AI Prompt
+            </button>
+            <button onclick="setInputMode('upload')" id="mode-upload" class="px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition">
+              Upload Image
+            </button>
+          </div>
+
+          <!-- Seamless Pill Toggle -->
+          <button onclick="toggleSeamless()" id="btn-seamless" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 transition">
+            <span id="seamless-icon" class="text-xs font-bold text-emerald-400">✓</span>
+            <span>Seamless Wrap</span>
+          </button>
+        </div>
+
+        <!-- Mode A: Text Prompt Input -->
+        <div id="section-prompt" class="space-y-2">
+          <textarea
+            id="promptInput"
+            rows="2"
+            placeholder="Describe material (e.g. Weathered stone bricks with moss...)"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-500 text-xs sm:text-sm focus:outline-none focus:border-emerald-500 transition resize-none"
+          >Medieval dungeon stone cobblestone with green moss</textarea>
+
+          <!-- Quick Presets -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[10px] text-slate-500 font-medium">Quick:</span>
+            <button onclick="setPreset('Medieval dungeon stone cobblestone with moss in crevices', 'realistic')" class="text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-800">Dungeon Stone</button>
+            <button onclick="setPreset('Cyberpunk hexagon metallic spaceship hull with glowing cyan circuit lines', 'scifi')" class="text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-800">Sci-Fi Hull</button>
+            <button onclick="setPreset('Stylized hand-painted cartoon pine wood timber planks', 'stylized')" class="text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-800">Cartoon Wood</button>
+            <button onclick="setPreset('Ancient dark volcanic rock with glowing fiery lava magma cracks', 'fantasy')" class="text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-800">Lava Cracks</button>
+          </div>
+        </div>
+
+        <!-- Mode B: Image Upload Dropzone (Hidden by default) -->
+        <div id="section-upload" class="hidden space-y-2">
+          <label class="block border-2 border-dashed border-slate-800 hover:border-emerald-500/50 rounded-xl p-4 text-center cursor-pointer transition bg-slate-950/60">
+            <input type="file" id="imageFileInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+            <div class="flex flex-col items-center gap-1.5">
+              <i data-lucide="upload-cloud" class="w-6 h-6 text-emerald-400"></i>
+              <span class="text-xs font-semibold text-slate-200">Upload any photo or texture</span>
+              <span class="text-[10px] text-slate-500">PNG, JPG or WebP. Auto-converts to 6 PBR maps</span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Art Style & Resolution Selectors -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <!-- Style -->
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Style Preset</label>
+            <select id="styleSelect" onchange="setStyle(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
+              <option value="realistic">Realistic PBR</option>
+              <option value="stylized">Stylized / Low-Poly</option>
+              <option value="scifi">Sci-Fi / Cyberpunk</option>
+              <option value="fantasy">Fantasy / Magic</option>
+              <option value="handpainted">Hand-Painted</option>
+            </select>
+          </div>
+
+          <!-- Resolution -->
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Target Resolution</label>
+            <select id="resSelect" onchange="setResolution(parseInt(this.value))" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
+              <option value="512">512 x 512 (Fast)</option>
+              <option value="1024" selected>1024 x 1024 (HD)</option>
+              <option value="2048">2048 x 2048 (2K Pro)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Primary Action Button: Generate -->
+        <button
+          id="btn-generate"
+          onclick="generateMaterial()"
+          class="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 text-slate-950 hover:brightness-110 active:scale-[0.99] transition shadow-emerald-500/20"
+        >
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+          <span id="btn-generate-text">Generate PBR Material (1 Credit)</span>
+        </button>
+
+        <!-- Engine Export Dropdown & Download Button -->
+        <div class="pt-3 border-t border-slate-800/80 flex items-center gap-2">
+          <select id="exportEngine" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer">
+            <option value="unity">Unity (URP/HDRP)</option>
+            <option value="ue5">Unreal Engine 5 (Packed ORM)</option>
+            <option value="godot">Godot 4 Engine</option>
+            <option value="blender">Blender (Principled BSDF)</option>
+            <option value="raw">Raw Individual PNGs</option>
+          </select>
+
+          <button onclick="exportMaterialZip()" class="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl text-xs border border-slate-700 transition shrink-0">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Export ZIP</span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- MODAL: MAP DETAIL ZOOM & DOWNLOAD -->
+  <div id="mapModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="relative max-w-lg w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h4 id="modalMapTitle" class="text-sm font-bold text-white">Map Preview</h4>
+        <button onclick="closeMapModal()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">✕</button>
+      </div>
+      <div class="w-full aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+        <img id="modalMapImg" class="max-w-full max-h-full object-contain" />
+      </div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button onclick="downloadActiveModalMap()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Download PNG
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRICING MODAL -->
+  <div id="pricingModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="relative max-w-3xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col gap-5 my-auto">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg sm:text-xl font-bold text-white">Choose Your Plan</h2>
+          <p class="text-xs text-slate-400">Instant game asset generation for commercial indie projects.</p>
+        </div>
+        <button onclick="closePricingModal()" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition">✕</button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- Free -->
+        <div class="rounded-xl p-4 border bg-slate-950 border-slate-800 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white">Free Starter</h3>
+            <div class="mt-2 text-2xl font-extrabold text-white">$0</div>
+            <p class="text-[11px] text-slate-400 mt-1">5 free credits on signup</p>
+            <ul class="mt-3 space-y-1.5 text-[11px] text-slate-300 border-t border-slate-800 pt-3">
+              <li>✓ 512x512 resolution</li>
+              <li>✓ 3D Viewport preview</li>
+              <li>✓ Non-commercial use</li>
+            </ul>
+          </div>
+          <button class="w-full mt-4 py-1.5 px-3 rounded-lg text-xs bg-slate-800 text-slate-500 cursor-default">Current Plan</button>
+        </div>
+
+        <!-- Indie Pro (Highlighted) -->
+        <div class="rounded-xl p-4 border bg-slate-950 border-emerald-500/60 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/40 flex flex-col justify-between relative">
+          <div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 font-bold text-[9px] uppercase px-2 py-0.5 rounded-full">
+            Recommended
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Indie Creator</h3>
+            <div class="mt-2 text-2xl font-extrabold text-white">$15 <span class="text-xs font-normal text-slate-400">/ mo</span></div>
+            <p class="text-[11px] text-emerald-400 font-semibold mt-1">250 Generations / Month</p>
+            <ul class="mt-3 space-y-1.5 text-[11px] text-slate-300 border-t border-slate-800 pt-3">
+              <li>✓ Up to 2K (2048x2048)</li>
+              <li>✓ Unity & UE5 ORM Export</li>
+              <li>✓ Commercial license (Steam/Epic)</li>
+            </ul>
+          </div>
+          <button onclick="upgradePlan('Indie Creator')" class="w-full mt-4 py-2 px-3 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition">Upgrade to Indie ($15)</button>
+        </div>
+
+        <!-- Studio -->
+        <div class="rounded-xl p-4 border bg-slate-950 border-slate-800 flex flex-col justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-white">Studio</h3>
+            <div class="mt-2 text-2xl font-extrabold text-white">$39 <span class="text-xs font-normal text-slate-400">/ mo</span></div>
+            <p class="text-[11px] text-slate-400 mt-1">1,000 Generations / Month</p>
+            <ul class="mt-3 space-y-1.5 text-[11px] text-slate-300 border-t border-slate-800 pt-3">
+              <li>✓ 4K Ultra Resolution</li>
+              <li>✓ Asset Store reselling rights</li>
+              <li>✓ Priority GPU queue</li>
+            </ul>
+          </div>
+          <button onclick="upgradePlan('Studio')" class="w-full mt-4 py-1.5 px-3 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition">Upgrade to Studio ($39)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 z-50 bg-slate-900 border border-emerald-500/50 text-white px-3.5 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-medium">
+    <span id="toastText"></span>
+  </div>
+
+  <!-- APPLICATION CODE -->
+  <script>
+    // --- State Variables ---
+    let credits = 5;
+    let currentStyle = 'realistic';
+    let resolution = 1024;
+    let seamless = true;
+    let meshShape = 'sphere';
+    let autoRotate = true;
+    let wireframe = false;
+    let inputMode = 'prompt';
+    let materialMaps = {};
+    let activeModalMapUrl = '';
+    let activeModalMapTitle = '';
+
+    // --- Perlin Noise Generator ---
+    class SimpleNoise {
+      constructor() {
+        this.p = [];
+        const perm = [
+          151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,
+          8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,
+          35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,
+          134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,
+          55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,
+          18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,186,3,64,52,217,226
+        ];
+        for (let i = 0; i < 256; i++) {
+          this.p[i] = perm[i % perm.length];
+          this.p[256 + i] = perm[i % perm.length];
+        }
+      }
+      fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+      lerp(t, a, b) { return a + t * (b - a); }
+      grad(hash, x, y) {
+        const h = hash & 7;
+        const u = h < 4 ? x : y;
+        const v = h < 4 ? y : x;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+      }
+      noise(x, y) {
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const xf = x - Math.floor(x);
+        const yf = y - Math.floor(y);
+        const u = this.fade(xf);
+        const v = this.fade(yf);
+        const A = this.p[X] + Y;
+        const B = this.p[X + 1] + Y;
+        return this.lerp(
+          v,
+          this.lerp(u, this.grad(this.p[A], xf, yf), this.grad(this.p[B], xf - 1, yf)),
+          this.lerp(u, this.grad(this.p[A + 1], xf, yf - 1), this.grad(this.p[B + 1], xf - 1, yf - 1))
+        );
+      }
+      fbm(x, y, octaves = 5) {
+        let total = 0, freq = 1, amp = 1, max = 0;
+        for (let i = 0; i < octaves; i++) {
+          total += this.noise(x * freq, y * freq) * amp;
+          max += amp;
+          amp *= 0.5;
+          freq *= 2;
+        }
+        return (total / max + 1) / 2;
+      }
+    }
+    const perlin = new SimpleNoise();
+
+    // --- Three.js Setup ---
+    let scene, camera, renderer, mesh, material, controls;
+    let textures = {};
+
+    function initThree() {
+      const container = document.getElementById('canvasContainer');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0e18);
+
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.set(0, 1.1, 3.1);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.25;
+      renderer.shadowMap.enabled = true;
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+      scene.add(ambient);
+
+      const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+      sun.position.set(5, 8, 5);
+      scene.add(sun);
+
+      const rim = new THREE.DirectionalLight(0x38bdf8, 1.1);
+      rim.position.set(-5, -2, -5);
+      scene.add(rim);
+
+      // Floor grid
+      const grid = new THREE.GridHelper(10, 20, 0x1e293b, 0x0f172a);
+      grid.position.y = -1.35;
+      scene.add(grid);
+
+      // Material
+      material = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.75,
+        metalness: 0.05,
+      });
+
+      // Initial Mesh: Sphere
+      const geo = new THREE.SphereGeometry(1.2, 64, 64);
+      mesh = new THREE.Mesh(geo, material);
+      scene.add(mesh);
+
+      // Animate Loop
+      function animate() {
+        requestAnimationFrame(animate);
+        if (autoRotate && mesh) {
+          mesh.rotation.y += 0.005;
+        }
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        if (!container || !renderer || !camera) return;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+    }
+
+    function setMeshShape(shape) {
+      meshShape = shape;
+      document.querySelectorAll('.shape-btn').forEach(b => {
+        b.className = 'shape-btn px-2.5 py-1 text-xs font-medium rounded-lg text-slate-400 hover:text-white shrink-0';
+      });
+      document.getElementById('shape-' + shape).className = 'shape-btn px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-500 text-slate-950 font-bold shrink-0';
+
+      let newGeo;
+      if (shape === 'cube') newGeo = new THREE.BoxGeometry(1.8, 1.8, 1.8, 32, 32, 32);
+      else if (shape === 'plane') newGeo = new THREE.PlaneGeometry(2.5, 2.5, 64, 64);
+      else if (shape === 'cylinder') newGeo = new THREE.CylinderGeometry(1, 1, 2, 48, 32);
+      else if (shape === 'torus') newGeo = new THREE.TorusGeometry(1.0, 0.45, 32, 64);
+      else newGeo = new THREE.SphereGeometry(1.2, 64, 64);
+
+      mesh.geometry.dispose();
+      mesh.geometry = newGeo;
+      applyTexturesToMaterial();
+    }
+
+    function toggleRotate() {
+      autoRotate = !autoRotate;
+      const btn = document.getElementById('btn-rotate');
+      btn.className = autoRotate 
+        ? 'p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs'
+        : 'p-1.5 rounded-lg text-slate-400 hover:text-white text-xs';
+    }
+
+    function toggleWireframe() {
+      wireframe = !wireframe;
+      material.wireframe = wireframe;
+      const btn = document.getElementById('btn-wireframe');
+      btn.className = wireframe
+        ? 'p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs'
+        : 'p-1.5 rounded-lg text-slate-400 hover:text-white text-xs';
+    }
+
+    function updateMaterialParams() {
+      const tiling = parseInt(document.getElementById('slider-tiling').value);
+      const normalScale = parseFloat(document.getElementById('slider-normal').value);
+      const roughness = parseFloat(document.getElementById('slider-roughness').value);
+      const displacement = parseFloat(document.getElementById('slider-displacement').value);
+
+      document.getElementById('val-tiling').innerText = tiling + 'x';
+      document.getElementById('val-normal').innerText = normalScale.toFixed(1);
+      document.getElementById('val-roughness').innerText = roughness.toFixed(2);
+      document.getElementById('val-displacement').innerText = displacement.toFixed(2);
+
+      material.roughness = roughness;
+      material.displacementScale = displacement;
+      if (material.normalScale) material.normalScale.set(normalScale, normalScale);
+
+      Object.values(textures).forEach(tex => {
+        tex.repeat.set(tiling, tiling);
+        tex.needsUpdate = true;
+      });
+      material.needsUpdate = true;
+    }
+
+    // --- Mode Switcher (Prompt vs Image Upload) ---
+    function setInputMode(mode) {
+      inputMode = mode;
+      const pBtn = document.getElementById('mode-prompt');
+      const uBtn = document.getElementById('mode-upload');
+      const pSec = document.getElementById('section-prompt');
+      const uSec = document.getElementById('section-upload');
+
+      if (mode === 'prompt') {
+        pBtn.className = 'px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500 text-slate-950 transition';
+        uBtn.className = 'px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition';
+        pSec.classList.remove('hidden');
+        uSec.classList.add('hidden');
+        document.getElementById('btn-generate-text').innerText = 'Generate PBR Material (1 Credit)';
+      } else {
+        uBtn.className = 'px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500 text-slate-950 transition';
+        pBtn.className = 'px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition';
+        uSec.classList.remove('hidden');
+        pSec.classList.add('hidden');
+        document.getElementById('btn-generate-text').innerText = 'Convert Image to PBR Maps (Free)';
+      }
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 512;
+          canvas.height = 512;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 512, 512);
+
+          if (seamless) {
+            applySeamlessBlendToCanvas(canvas);
+          }
+
+          extractPBRChannels(canvas);
+          showToast('✅ Uploaded image successfully converted to 6 PBR maps!');
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function applySeamlessBlendToCanvas(canvas) {
+      const size = canvas.width;
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.getImageData(0, 0, size, size);
+      const data = imgData.data;
+      const blendW = Math.floor(size * 0.15);
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < blendW; x++) {
+          const alpha = x / blendW;
+          const leftIdx = (y * size + x) * 4;
+          const rightIdx = (y * size + (size - 1 - (blendW - 1 - x))) * 4;
+          for (let c = 0; c < 3; c++) {
+            const bVal = data[leftIdx + c] * alpha + data[rightIdx + c] * (1 - alpha);
+            data[leftIdx + c] = bVal;
+            data[rightIdx + c] = bVal;
+          }
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // --- Texture Generator Engine ---
+    function generateMaterial() {
+      if (inputMode === 'upload') {
+        document.getElementById('imageFileInput').click();
+        return;
+      }
+
+      if (credits <= 0) {
+        openPricingModal();
+        return;
+      }
+
+      const prompt = document.getElementById('promptInput').value.trim();
+      if (!prompt) return;
+
+      const btn = document.getElementById('btn-generate');
+      btn.disabled = true;
+      document.getElementById('btn-generate-text').innerText = 'Synthesizing PBR Maps...';
+
+      setTimeout(() => {
+        const size = 512;
+        const albedoCanvas = document.createElement('canvas');
+        albedoCanvas.width = size;
+        albedoCanvas.height = size;
+        const ctx = albedoCanvas.getContext('2d');
+        const imgData = ctx.createImageData(size, size);
+        const data = imgData.data;
+
+        const p = prompt.toLowerCase();
+        const isStone = p.includes('stone') || p.includes('rock') || p.includes('brick') || p.includes('cobble');
+        const isWood = p.includes('wood') || p.includes('plank') || p.includes('timber');
+        const isSciFi = p.includes('scifi') || p.includes('sci-fi') || p.includes('metal') || p.includes('hull') || p.includes('tech');
+        const isLava = p.includes('lava') || p.includes('magma') || p.includes('fire');
+        const isMarble = p.includes('marble') || p.includes('gold');
+
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const idx = (y * size + x) * 4;
+            const nx = x / size;
+            const ny = y / size;
+
+            let r = 120, g = 120, b = 120;
+
+            if (isLava) {
+              const n = perlin.fbm(nx * 6, ny * 6, 6);
+              const cracks = Math.pow(Math.abs(perlin.noise(nx * 12, ny * 12)), 0.6);
+              if (cracks > 0.42) {
+                r = Math.min(255, 230 + n * 40);
+                g = Math.min(255, 60 + n * 120);
+                b = 10;
+              } else {
+                const dark = n * 45;
+                r = 25 + dark; g = 20 + dark; b = 20 + dark;
+              }
+            } else if (isWood) {
+              const grain = perlin.fbm(nx * 20, ny * 2, 4);
+              const ring = Math.sin((nx * 15 + grain * 4) * Math.PI * 2);
+              const tone = (ring + 1) * 0.5;
+              r = Math.floor(130 + tone * 45);
+              g = Math.floor(75 + tone * 35);
+              b = Math.floor(35 + tone * 20);
+            } else if (isSciFi) {
+              const cellX = Math.floor(nx * 8);
+              const cellY = Math.floor(ny * 8);
+              const isBorder = (x % (size / 8) < 3) || (y % (size / 8) < 3);
+              const n = perlin.fbm(nx * 10, ny * 10, 3);
+              if (isBorder) {
+                r = 20; g = 25; b = 35;
+              } else {
+                const metallic = ((cellX + cellY) % 2 === 0 ? 110 : 85) + n * 30;
+                r = metallic; g = metallic + 5; b = metallic + 15;
+                if (p.includes('neon') || p.includes('cyan') || p.includes('circuit')) {
+                  if (cellX % 3 === 0 && cellY % 3 === 0) {
+                    r = 20; g = 210; b = 255;
+                  }
+                }
+              }
+            } else if (isStone) {
+              const brickW = size / 6;
+              const brickH = size / 12;
+              const row = Math.floor(y / brickH);
+              const offsetX = (row % 2 === 1) ? brickW / 2 : 0;
+              const inBorder = ((x + offsetX) % brickW < 4) || (y % brickH < 4);
+              const stoneNoise = perlin.fbm(nx * 8, ny * 8, 5);
+
+              if (inBorder) {
+                if (p.includes('moss')) {
+                  r = 45 + stoneNoise * 20; g = 75 + stoneNoise * 40; b = 35;
+                } else {
+                  r = 50; g = 50; b = 50;
+                }
+              } else {
+                const base = 110 + stoneNoise * 35;
+                r = base;
+                g = p.includes('moss') ? base + 15 : base;
+                b = base - 5;
+              }
+            } else if (isMarble) {
+              const vein = Math.sin((nx * 4 + perlin.fbm(nx * 4, ny * 4, 5) * 5) * Math.PI);
+              const v = Math.pow(Math.abs(vein), 4);
+              r = Math.floor(220 - v * 120);
+              g = Math.floor(215 - v * 120);
+              b = Math.floor(210 - v * 110);
+            } else {
+              const n = perlin.fbm(nx * 8, ny * 8, 5);
+              r = Math.floor(n * 200);
+              g = Math.floor(n * 190);
+              b = Math.floor(n * 180);
+            }
+
+            data[idx] = Math.max(0, Math.min(255, r));
+            data[idx + 1] = Math.max(0, Math.min(255, g));
+            data[idx + 2] = Math.max(0, Math.min(255, b));
+            data[idx + 3] = 255;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        if (seamless) {
+          applySeamlessBlendToCanvas(albedoCanvas);
+        }
+
+        extractPBRChannels(albedoCanvas);
+
+        credits = Math.max(0, credits - 1);
+        document.getElementById('creditBadge').innerText = credits + ' Credits';
+
+        btn.disabled = false;
+        document.getElementById('btn-generate-text').innerText = 'Generate PBR Material (1 Credit)';
+        showToast('✨ Material generated! 1 Credit deducted.');
+      }, 300);
+    }
+
+    function extractPBRChannels(albedoCanvas) {
+      const w = albedoCanvas.width;
+      const h = albedoCanvas.height;
+      const aData = albedoCanvas.getContext('2d').getImageData(0, 0, w, h).data;
+
+      // 1. Height
+      const heightArr = new Float32Array(w * h);
+      const hCanvas = document.createElement('canvas'); hCanvas.width = w; hCanvas.height = h;
+      const hCtx = hCanvas.getContext('2d');
+      const hImg = hCtx.createImageData(w, h);
+
+      for (let i = 0; i < w * h; i++) {
+        const idx = i * 4;
+        const lum = (aData[idx] * 0.299 + aData[idx + 1] * 0.587 + aData[idx + 2] * 0.114) / 255.0;
+        heightArr[i] = lum;
+        const b = Math.floor(lum * 255);
+        hImg.data[idx] = b; hImg.data[idx + 1] = b; hImg.data[idx + 2] = b; hImg.data[idx + 3] = 255;
+      }
+      hCtx.putImageData(hImg, 0, 0);
+
+      // 2. Normal (Sobel)
+      const nCanvas = document.createElement('canvas'); nCanvas.width = w; nCanvas.height = h;
+      const nCtx = nCanvas.getContext('2d');
+      const nImg = nCtx.createImageData(w, h);
+      const strength = 2.0;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          const px = idx * 4;
+          const x0 = (x - 1 + w) % w, x1 = (x + 1) % w;
+          const y0 = (y - 1 + h) % h, y1 = (y + 1) % h;
+
+          const tl = heightArr[y0 * w + x0], t = heightArr[y0 * w + x], tr = heightArr[y0 * w + x1];
+          const l = heightArr[y * w + x0], r = heightArr[y * w + x1];
+          const bl = heightArr[y1 * w + x0], b = heightArr[y1 * w + x], br = heightArr[y1 * w + x1];
+
+          let dx = ((tr + 2 * r + br) - (tl + 2 * l + bl)) * strength;
+          let dy = ((bl + 2 * b + br) - (tl + 2 * t + tr)) * strength;
+          let dz = 1.0;
+          const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          dx /= len; dy /= len; dz /= len;
+
+          nImg.data[px] = Math.floor(((-dx) * 0.5 + 0.5) * 255);
+          nImg.data[px + 1] = Math.floor(((-dy) * 0.5 + 0.5) * 255);
+          nImg.data[px + 2] = Math.floor((dz * 0.5 + 0.5) * 255);
+          nImg.data[px + 3] = 255;
+        }
+      }
+      nCtx.putImageData(nImg, 0, 0);
+
+      // 3. Roughness
+      const rCanvas = document.createElement('canvas'); rCanvas.width = w; rCanvas.height = h;
+      const rCtx = rCanvas.getContext('2d');
+      const rImg = rCtx.createImageData(w, h);
+      for (let i = 0; i < w * h; i++) {
+        const idx = i * 4;
+        const val = Math.floor(Math.max(20, Math.min(240, (1.0 - heightArr[i] * 0.6) * 255)));
+        rImg.data[idx] = val; rImg.data[idx + 1] = val; rImg.data[idx + 2] = val; rImg.data[idx + 3] = 255;
+      }
+      rCtx.putImageData(rImg, 0, 0);
+
+      // 4. AO
+      const aoCanvas = document.createElement('canvas'); aoCanvas.width = w; aoCanvas.height = h;
+      const aoCtx = aoCanvas.getContext('2d');
+      const aoImg = aoCtx.createImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          const px = idx * 4;
+          let sum = 0, count = 0;
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              sum += heightArr[((y + dy + h) % h) * w + ((x + dx + w) % w)];
+              count++;
+            }
+          }
+          const avg = sum / count;
+          const aoVal = Math.floor(Math.max(40, Math.min(255, (1.0 + (heightArr[idx] - avg) * 2.0) * 255)));
+          aoImg.data[px] = aoVal; aoImg.data[px + 1] = aoVal; aoImg.data[px + 2] = aoVal; aoImg.data[px + 3] = 255;
+        }
+      }
+      aoCtx.putImageData(aoImg, 0, 0);
+
+      // 5. Packed ORM
+      const ormCanvas = document.createElement('canvas'); ormCanvas.width = w; ormCanvas.height = h;
+      const ormCtx = ormCanvas.getContext('2d');
+      const ormImg = ormCtx.createImageData(w, h);
+      for (let i = 0; i < w * h; i++) {
+        const idx = i * 4;
+        ormImg.data[idx] = aoImg.data[idx];
+        ormImg.data[idx + 1] = rImg.data[idx];
+        ormImg.data[idx + 2] = 10;
+        ormImg.data[idx + 3] = 255;
+      }
+      ormCtx.putImageData(ormImg, 0, 0);
+
+      materialMaps = {
+        albedo: albedoCanvas.toDataURL('image/png'),
+        normal: nCanvas.toDataURL('image/png'),
+        roughness: rCanvas.toDataURL('image/png'),
+        height: hCanvas.toDataURL('image/png'),
+        ao: aoCanvas.toDataURL('image/png'),
+        orm: ormCanvas.toDataURL('image/png'),
+      };
+
+      document.getElementById('img-albedo').src = materialMaps.albedo;
+      document.getElementById('img-normal').src = materialMaps.normal;
+      document.getElementById('img-roughness').src = materialMaps.roughness;
+      document.getElementById('img-height').src = materialMaps.height;
+      document.getElementById('img-ao').src = materialMaps.ao;
+      document.getElementById('img-orm').src = materialMaps.orm;
+
+      applyTexturesToMaterial();
+    }
+
+    function applyTexturesToMaterial() {
+      if (!materialMaps.albedo) return;
+      const loader = new THREE.TextureLoader();
+      const tiling = parseInt(document.getElementById('slider-tiling').value);
+
+      function loadMap(url, onLoaded) {
+        loader.load(url, (tex) => {
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(tiling, tiling);
+          onLoaded(tex);
+          material.needsUpdate = true;
+        });
+      }
+
+      loadMap(materialMaps.albedo, (tex) => {
+        tex.encoding = THREE.sRGBEncoding;
+        material.map = tex;
+        textures.albedo = tex;
+      });
+
+      loadMap(materialMaps.normal, (tex) => {
+        material.normalMap = tex;
+        textures.normal = tex;
+      });
+
+      loadMap(materialMaps.roughness, (tex) => {
+        material.roughnessMap = tex;
+        textures.roughness = tex;
+      });
+
+      loadMap(materialMaps.ao, (tex) => {
+        material.aoMap = tex;
+        material.aoMapIntensity = 1.2;
+        textures.ao = tex;
+        if (!mesh.geometry.attributes.uv2 && mesh.geometry.attributes.uv) {
+          mesh.geometry.setAttribute('uv2', mesh.geometry.attributes.uv);
+        }
+      });
+
+      loadMap(materialMaps.height, (tex) => {
+        material.displacementMap = tex;
+        material.displacementScale = parseFloat(document.getElementById('slider-displacement').value);
+        textures.height = tex;
+      });
+    }
+
+    // --- Presets & Toggles ---
+    function setPreset(pText, pStyle) {
+      document.getElementById('promptInput').value = pText;
+      setStyle(pStyle);
+      generateMaterial();
+    }
+
+    function setStyle(st) {
+      currentStyle = st;
+      document.getElementById('styleSelect').value = st;
+    }
+
+    function setResolution(res) {
+      resolution = res;
+      document.getElementById('resSelect').value = res;
+    }
+
+    function toggleSeamless() {
+      seamless = !seamless;
+      const btn = document.getElementById('btn-seamless');
+      const icon = document.getElementById('seamless-icon');
+      if (seamless) {
+        btn.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 transition';
+        icon.innerText = '✓';
+      } else {
+        btn.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-slate-900 border-slate-800 text-slate-400 transition';
+        icon.innerText = '✕';
+      }
+    }
+
+    // --- Single Map Zoom Modal ---
+    function openMapModal(title, url) {
+      if (!url) return;
+      activeModalMapTitle = title;
+      activeModalMapUrl = url;
+      document.getElementById('modalMapTitle').innerText = title;
+      document.getElementById('modalMapImg').src = url;
+      document.getElementById('mapModal').classList.remove('hidden');
+    }
+
+    function closeMapModal() {
+      document.getElementById('mapModal').classList.add('hidden');
+    }
+
+    function downloadActiveModalMap() {
+      if (!activeModalMapUrl) return;
+      const a = document.createElement('a');
+      a.href = activeModalMapUrl;
+      a.download = `${activeModalMapTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
+      a.click();
+    }
+
+    // --- Engine ZIP Exporter ---
+    async function exportMaterialZip() {
+      if (!materialMaps.albedo) {
+        showToast('⚠️ Generate a material first before exporting!');
+        return;
+      }
+      const engine = document.getElementById('exportEngine').value;
+      const prompt = document.getElementById('promptInput').value.trim();
+      const name = prompt.slice(0, 18).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'Material';
+
+      showToast(`📦 Packaging ZIP for ${engine.toUpperCase()}...`);
+
+      const zip = new JSZip();
+      const folder = zip.folder(name);
+
+      function addFile(fileName, dataURL) {
+        const base64 = dataURL.split(',')[1];
+        folder.file(fileName, base64, { base64: true });
+      }
+
+      addFile(`${name}_Albedo.png`, materialMaps.albedo);
+      addFile(`${name}_Normal.png`, materialMaps.normal);
+      addFile(`${name}_Roughness.png`, materialMaps.roughness);
+      addFile(`${name}_Height.png`, materialMaps.height);
+      addFile(`${name}_AO.png`, materialMaps.ao);
+      if (engine === 'ue5' || engine === 'raw') {
+        addFile(`${name}_ORM_Packed.png`, materialMaps.orm);
+      }
+
+      let readme = `=== ${name.toUpperCase()} PBR MATERIAL PACKAGE ===\nGenerated with TextureForge AI\n\n`;
+      if (engine === 'unity') {
+        readme += `[UNITY URP / HDRP]:\n1. Import textures into Assets.\n2. In Inspector, set ${name}_Normal.png type to "Normal Map".\n3. Assign Albedo to Base Map, Normal to Normal Map, AO to Occlusion.\n`;
+      } else if (engine === 'ue5') {
+        readme += `[UNREAL ENGINE 5]:\n1. Import files.\n2. Open ${name}_ORM_Packed.png and uncheck sRGB.\n3. In Material: R -> AO, G -> Roughness, B -> Metallic.\n`;
+      } else if (engine === 'godot') {
+        readme += `[GODOT 4]:\n1. In StandardMaterial3D: Albedo -> Albedo.png, Roughness -> Roughness.png, Normal -> Normal.png, AO -> AO.png.\n`;
+      } else if (engine === 'blender') {
+        readme += `[BLENDER]:\n1. In Principled BSDF, attach Albedo (sRGB), Roughness (Non-Color), Normal Map node -> Normal (Non-Color).\n`;
+      }
+      folder.file('README_SETUP.txt', readme);
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      saveAs(blob, `${name}_${engine}_PBR_Textures.zip`);
+      showToast(`✅ ${name}_${engine}_PBR_Textures.zip downloaded!`);
+    }
+
+    // --- Pricing & Toasts ---
+    function openPricingModal() {
+      document.getElementById('pricingModal').classList.remove('hidden');
+    }
+
+    function closePricingModal() {
+      document.getElementById('pricingModal').classList.add('hidden');
+    }
+
+    function upgradePlan(plan) {
+      credits += 250;
+      document.getElementById('creditBadge').innerText = credits + ' Credits';
+      closePricingModal();
+      showToast(`🎉 Upgraded to ${plan}! +250 Credits added.`);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastText').innerText = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3500);
+    }
+
+    // Initialize on load
+    window.onload = () => {
+      lucide.createIcons();
+      initThree();
+      generateMaterial();
+    };
+  </script>
+</body>
+</html>
